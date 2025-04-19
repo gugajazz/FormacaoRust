@@ -1,5 +1,26 @@
 fn fibonacci(n: u32) -> u32 {
-    todo!("Implementar fibonacci aqui")
+    if n == 0{
+        return 0;
+    }
+    else if n == 1 {
+        return 1;
+    }
+    else{
+        return fibonacci(n-1) + fibonacci(n-2);
+    }
+
+    /* 
+    fibonacci(5) = fibonacci(4) + fibonacci(3)
+    fibonacci(4) = fibonacci(3) + fibonacci(2)
+    fibonacci(3) = fibonacci(2) + fibonacci(1)
+    fibonacci(2) = fibonacci(1) + fibonacci(0)
+
+    fibonacci(5) = 3 + 2
+    fibonacci(4) = 2 + 1
+    fibonacci(3) = 1 + 1
+    fibonacci(2) = 1 + 0
+    
+    */
 }
 
 #[cfg(test)]
@@ -22,4 +43,9 @@ mod fibonacci_test {
 
 }
 
-fn main() {}
+fn main() {
+    println!("Fibonacci of 10 is {}", fibonacci(10));
+
+    let deleteme = fibonacci(10);
+    println!("Fibonacci of 10 is {deleteme}");
+}
