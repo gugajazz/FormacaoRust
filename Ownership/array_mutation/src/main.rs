@@ -1,11 +1,51 @@
 
 
-fn array_mut_ownership(array: [u32; 5], operation: char, other_member: u32) -> [u32; 5] {
-    todo!()
+/*
+Dada uma operação e um número (semelhante à calculadora), 
+aplicar esta operação a todos os membros de um array definido por si. 
+Resolver com recurso a passagem de ownership e com referências.
+*/
+
+
+fn array_mut_ownership(array: [u32; 5], op: char, val: u32) -> [u32; 5] {
+    let mut result = [0; 5];
+
+    for (i, &x) in array.iter().enumerate() {
+        result[i] = match op {
+            '+' => x + val,
+            '-' => x - val,
+            '*' => x * val,
+            '/' => x / val,
+            _ => panic!("Invalid operation"),
+        };
+    }
+
+    result
 }
 
+
+
 fn array_mut_mut(array: &mut [u32], operation: char, other_member: u32) {
-    todo!()
+    for i in 0..array.len() {
+        array[i] = match operation {
+            '+' => array[i] + other_member,
+            '-' => array[i] - (other_member),
+            '*' => array[i] * other_member,
+            '/' => array[i] / other_member,
+            _ => panic!("Invalid operation"),
+        };
+    }
+}
+
+fn main(){
+    let array = [1, 2, 3, 4, 5];
+    let result = array_mut_ownership(array, '+', 1);
+    println!("Original array: {:?}", array); // I can only access this because ths array is a copy type.
+    println!("Result with ownership: {:?}", result);
+
+    let mut array = [1, 2, 3, 4, 5];
+    array_mut_mut(&mut array, '+', 1);
+    println!("Result with mutable reference: {:?}", array);
 }
 
 #[cfg(test)]
@@ -49,5 +89,3 @@ mod array_mutation_test {
     }
 
 }
-
-fn main() {}

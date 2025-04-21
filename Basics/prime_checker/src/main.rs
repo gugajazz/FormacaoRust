@@ -1,7 +1,19 @@
-fn main() {}
 
 fn check_if_prime(n: u32) -> bool {
-    todo!("Implementar check_if_prime aqui")
+    if n < 2 {
+        return false;
+    }
+
+    for i in 2..n {
+        if n % i == 0 {
+            return false;
+        }
+    }
+    true
+}
+
+fn main(){
+    println!("{}", check_if_prime(1));
 }
 
 #[cfg(test)]
