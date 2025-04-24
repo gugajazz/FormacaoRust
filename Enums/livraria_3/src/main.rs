@@ -1,253 +1,498 @@
-/*
+use ordered_float::OrderedFloat;
+use std::collections::{HashMap, HashSet};
+use std::io::{self, Write};
+use uuid::Uuid;
 
-Extender a livraria anterior para poder ter livros, audio books, estátuas e quadros.
-Deve manter as mesmas capacidades.
-Deve também ter o máximo de elementos comuns em zonas partilhadas,
-utilizando composição para partilhar o máximo de código possivel
-(por exemplo, todos os elementos têm título e autor, mas apenas os audio books têm durações,
-apenas as estátuas e quadros têm dimensões físicas).
+type BookId = usize; // Type alias for book ID
 
-*/
+// Helper functions for the terminal interface
+fn prompt_input(prompt: &str) -> String {
+    print!("{}", prompt);
+    io::stdout().flush().unwrap();
 
-use std::collections::HashMap;
-use std::io;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    input.trim().to_string()
+}
 
+fn prompt_numeric<T: std::str::FromStr>(prompt: &str) -> T {
+    loop {
+        print!("{}", prompt);
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+
+        match input.trim().parse::<T>() {
+            Ok(value) => return value,
+            Err(_) => println!("Invalid input. Please enter a valid number."),
+        }
+    }
+}
+
+fn prompt_yes_no(prompt: &str) -> bool {
+    loop {
+        print!("{}", prompt);
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+
+        match input.trim().to_lowercase().as_str() {
+            "y" | "yes" => return true,
+            "n" | "no" => return false,
+            _ => println!("Invalid input. Please enter 'y' or 'n'."),
+        }
+    }
+}
+
+// New function to handle keyword input as an array
+fn prompt_keywords(prompt: &str) -> Vec<String> {
+    print!("{}", prompt);
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+
+    // Split the input by commas and convert to trimmed Strings
+    input
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// An inverted index mapping keywords to sets of book IDs.
+pub struct InvertedIndex {
+    index: HashMap<String, HashSet<Uuid>>,
+}
+
+impl InvertedIndex {
+    /// Creates a new empty inverted index.
+    pub fn new() -> Self {
+        Self {
+            index: HashMap::new(),
+        }
+    }
+
+    /// Adds a book and updates the index with its keywords.
+    pub fn add_item(&mut self, item: &Item) {
+        match item {
+            Item::Book(book) => {
+                for keyword in &book.textual_or_auditive_media.keywords {
+                    self.index
+                        .entry(keyword.to_lowercase())
+                        .or_default()
+                        .insert(book.uuid);
+                }
+            }
+            Item::AudioBook(audiobook) => {
+                for keyword in &audiobook.textual_or_auditive_media.keywords {
+                    self.index
+                        .entry(keyword.to_lowercase())
+                        .or_default()
+                        .insert(audiobook.uuid);
+                }
+            }
+            _ => panic!("Unsupported item type for indexing."),
+        }
+    }
+
+    /// Searches for books by a keyword (case-insensitive).
+    pub fn search(&self, keyword: &str) -> Vec<&Uuid> {
+        match self.index.get(&keyword.to_lowercase()) {
+            Some(book_ids) => {
+                // book_ids.iter().map(|&id| &self.books[id]).collect();
+                return book_ids.iter().collect();
+            }
+            None => Vec::new(),
+        }
+    }
+}
+
+// Item enum to store all possible library items
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Item {
-    Livro(Livro),
+    Book(Book),
     AudioBook(AudioBook),
-    Estatuas(Estatua),
-    Quadros(Quadro),
+    Statue(Statue),
+    Painting(Painting),
 }
 
-#[derive(Debug)]
-struct MediaGeral {
-    titulo: String,
-    autor: String,
-    localizacao: String,
+// Common traits and structures
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct GeneralMedia {
+    title: String,
+    author: String,
+}
+impl GeneralMedia {
+    fn terminal_interface_new() -> Self {
+        // Collect GeneralMedia information
+        println!("\n-- General Media Information --");
+        let title = prompt_input("Title: ");
+        let author = prompt_input("Author: ");
+        GeneralMedia { title, author }
+    }
 }
 
-#[derive(Debug)]
-struct MediaTextualOuAuditiva {
-    palavras_chave: Vec<String>,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct TextualOrAuditiveMedia {
+    keywords: Vec<String>,
+}
+impl TextualOrAuditiveMedia {
+    fn terminal_interface_new() -> Self {
+        // Collect TextualOrAuditiveMedia information
+        println!("\n-- Textual Media Information --");
+        let keywords = prompt_keywords("Enter keywords (comma-separated): ");
+        TextualOrAuditiveMedia { keywords }
+    }
 }
 
-#[derive(Debug)]
-struct MediaFisica {
-    dimensao: (f32, f32, f32), // largura, altura, profundidade (em metros)
-    peso: f32,                 // peso em kg
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct PhysicalMedia {
+    location: String,
+    condition: String,
+}
+impl PhysicalMedia {
+    fn terminal_interface_new() -> Self {
+        // Collect PhysicalMedia information
+        println!("\n-- Physical Media Information --");
+        let location = prompt_input("Location (shelf/section): ");
+        let condition = prompt_input("Condition (new/good/fair/poor): ");
+        PhysicalMedia {
+            location,
+            condition,
+        }
+    }
 }
 
-#[derive(Debug)]
-struct MediaEmprestavel {
-    exemplares_em_stock: u32,
-    exemplares_emprestados: u32,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct BorrowableMedia {
+    copies_in_stock: u32,
+    copies_borrowed: u32,
+}
+impl BorrowableMedia {
+    fn terminal_interface_new() -> Self {
+        // Collect BorrowableMedia information
+        println!("\n-- Borrowable Media Information --");
+        let copies_in_stock = prompt_numeric("Copies in stock: ");
+        BorrowableMedia {
+            copies_in_stock,
+            copies_borrowed: 0,
+        }
+    }
+
+    fn borrow(&mut self, quantity: Option<u32>) -> bool {
+        let quantity = quantity.unwrap_or(1);
+        if self.copies_in_stock >= quantity {
+            self.copies_in_stock -= quantity;
+            self.copies_borrowed += quantity;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn return_item(&mut self, quantity: Option<u32>) -> bool {
+        let quantity = quantity.unwrap_or(1);
+        if self.copies_borrowed >= quantity {
+            self.copies_borrowed -= quantity;
+            self.copies_in_stock += quantity;
+            true
+        } else {
+            false
+        }
+    }
 }
 
-#[derive(Debug)]
-struct Livro {
-    media_geral: MediaGeral,
-    media_textual_ou_auditiva: MediaTextualOuAuditiva,
-    media_emprestavel: MediaEmprestavel,
-    media_fisica: MediaFisica,
+// Specific media types
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct Book {
+    general_media: GeneralMedia,
+    textual_or_auditive_media: TextualOrAuditiveMedia,
+    borrowable_media: BorrowableMedia,
+    physical_media: PhysicalMedia,
     isbn: String,
+    uuid: Uuid,
+}
+impl Book {
+    fn terminal_interface_new() -> Self {
+        println!("=== Create New Book ===");
+
+        let general_media = GeneralMedia::terminal_interface_new();
+        let textual_or_auditive_media = TextualOrAuditiveMedia::terminal_interface_new();
+        let borrowable_media = BorrowableMedia::terminal_interface_new();
+        let physical_media = PhysicalMedia::terminal_interface_new();
+
+        // Collect Book-specific information
+        println!("\n-- Book-specific Information --");
+        let isbn = prompt_input("ISBN: ");
+        let uuid = Uuid::new_v4();
+        println!("Generated UUID: {}", uuid);
+
+        // Create and return Book instance
+        Book {
+            general_media: general_media,
+            textual_or_auditive_media,
+            borrowable_media: borrowable_media,
+            physical_media: physical_media,
+            isbn,
+            uuid,
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct AudioBook {
-    media_geral: MediaGeral,
-    media_textual_ou_auditiva: MediaTextualOuAuditiva,
-    media_emprestavel: MediaEmprestavel,
-    duracao: f32, // duração em horas
+    general_media: GeneralMedia,
+    textual_or_auditive_media: TextualOrAuditiveMedia,
+    borrowable_media: BorrowableMedia,
+    duration: OrderedFloat<f32>, // duration in hours
+    uuid: Uuid,
 }
+impl AudioBook {
+    fn terminal_interface_new() -> Self {
+        println!("=== Create New AudioBook ===");
 
-#[derive(Debug)]
-struct Estatua {
-    media_geral: MediaGeral,
-    media_fisica: MediaFisica,
-}
+        let general_media = GeneralMedia::terminal_interface_new();
+        let textual_or_auditive_media = TextualOrAuditiveMedia::terminal_interface_new();
+        let borrowable_media = BorrowableMedia::terminal_interface_new();
 
-#[derive(Debug)]
-struct Quadro {
-    media_geral: MediaGeral,
-    media_fisica: MediaFisica,
-}
+        // Collect Book-specific information
+        println!("\n-- Audiobook-specific Information --");
+        let duration = prompt_numeric("Duration: ");
+        let uuid = Uuid::new_v4();
+        println!("Generated UUID: {}", uuid);
 
-impl MediaEmprestavel {
-    fn requesitar(&mut self, quantidade: Option<u32>) -> bool {
-        let quantidade = quantidade.unwrap_or(1);
-        if self.exemplares_em_stock >= quantidade {
-            self.exemplares_em_stock -= quantidade;
-            self.exemplares_emprestados += quantidade;
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    fn devolver(&mut self, quantidade: Option<u32>) -> bool {
-        let quantidade = quantidade.unwrap_or(1);
-        if self.exemplares_emprestados >= quantidade {
-            self.exemplares_emprestados -= quantidade;
-            self.exemplares_em_stock += quantidade;
-            return true;
-        } else {
-            return false;
+        // Create and return Book instance
+        AudioBook {
+            general_media: general_media,
+            textual_or_auditive_media: textual_or_auditive_media,
+            borrowable_media: borrowable_media,
+            duration: duration,
+            uuid,
         }
     }
 }
 
-struct Livraria {
-    livros: HashMap<String, Livro>, // chave: ISBN
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct Statue {
+    general_media: GeneralMedia,
+    physical_media: PhysicalMedia,
+    material: String,
+    uuid: Uuid,
+}
+impl Statue {
+    fn terminal_interface_new() -> Self {
+        println!("=== Create New Statue ===");
+
+        let general_media = GeneralMedia::terminal_interface_new();
+        let physical_media = PhysicalMedia::terminal_interface_new();
+
+        // Collect Book-specific information
+        println!("\n-- Statue-specific Information --");
+        let material = prompt_input("Material (stone, wood): ");
+        let uuid = Uuid::new_v4();
+        println!("Generated UUID: {}", uuid);
+
+        // Create and return Book instance
+        Statue {
+            general_media: general_media,
+            physical_media: physical_media,
+            material,
+            uuid,
+        }
+    }
 }
 
-impl Livraria {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct Painting {
+    general_media: GeneralMedia,
+    physical_media: PhysicalMedia,
+    style: String,
+    uuid: Uuid,
+}
+impl Painting {
+    fn terminal_interface_new() -> Self {
+        println!("=== Create New Painting ===");
+
+        let general_media = GeneralMedia::terminal_interface_new();
+        let physical_media = PhysicalMedia::terminal_interface_new();
+
+        // Collect Book-specific information
+        println!("\n-- Painting-specific Information --");
+        let style = prompt_input("Style (Modern, Post-Modern, Baroque): ");
+        let uuid = Uuid::new_v4();
+        println!("Generated UUID: {}", uuid);
+
+        // Create and return Book instance
+        Painting {
+            general_media: general_media,
+            physical_media: physical_media,
+            style,
+            uuid,
+        }
+    }
+}
+
+// Library structure to manage all items
+struct Library {
+    items: HashMap<Uuid, Item>, // key: ISBN
+    inverted_index: InvertedIndex,
+}
+
+impl Library {
     fn new() -> Self {
-        Livraria {
-            livros: HashMap::new(),
+        Library {
+            items: HashMap::new(),
+            inverted_index: InvertedIndex::new(),
         }
     }
 
-    fn adicionar_livro(&mut self, livro: Livro) {
-        let isbn_copy = livro.isbn.clone();
-
-        let livro_from_hash_map = self.livros.get_mut(&isbn_copy);
-        match livro_from_hash_map {
-            Some(livro) => {
-                livro.media_emprestavel.exemplares_em_stock += 1;
+    fn add_item(mut self, item: Item) {
+        match item {
+            Item::Book(ref book) => {
+                self.inverted_index.add_item(&item);
+                self.items.insert(book.uuid, item);
             }
-
-            None => {
-                self.livros.insert(isbn_copy, livro);
+            Item::AudioBook(ref audiobook) => {
+                self.inverted_index.add_item(&item);
+                self.items.insert(audiobook.uuid, item);
             }
-        }
-    }
-
-    fn remover_livro(&mut self, isbn: &str) -> bool {
-        self.livros.remove(isbn).is_some()
-    }
-
-    fn requisitar_livro(&mut self, isbn: &str) -> bool {
-        let livro_option = self.livros.get_mut(isbn);
-        match livro_option {
-            Some(livro) => return livro.media_emprestavel.requesitar(None),
-            None => {
-                println!("Livro not in stock");
-                false
+            Item::Statue(ref statue) => {
+                self.items.insert(statue.uuid, item);
+            }
+            Item::Painting(ref painting) => {
+                self.items.insert(painting.uuid, item);
             }
         }
     }
 
-    fn devolver_livro(&mut self, isbn: &str) -> bool {
-        let livro_option = self.livros.get_mut(isbn);
-        match livro_option {
-            Some(livro) => return livro.media_emprestavel.devolver(None),
-            None => {
-                println!("Livro not in stock");
-                false
+    fn remove_item(&mut self, uuid: &str) {
+        if let Ok(uuid) = Uuid::parse_str(uuid) {
+            if self.items.remove(&uuid).is_some() {
+                println!("Item with UUID {} removed successfully.", uuid);
+            } else {
+                println!("Item with UUID {} not found.", uuid);
             }
+        } else {
+            println!("Invalid UUID format.");
         }
     }
 
-    fn listar_livros(&self) {
-        for livro in self.livros.values() {
-            println!(
-                "{} - {} por {} | Stock: {} | Emprestados: {}",
-                livro.isbn,
-                livro.media_geral.titulo,
-                livro.media_geral.autor,
-                livro.media_emprestavel.exemplares_em_stock,
-                livro.media_emprestavel.exemplares_emprestados
-            );
+    fn add_item_terminal_interface(mut self) {
+        println!("=== Add New Item ===");
+        let item_type = prompt_input("Enter item type (book/audiobook/statue/painting): ");
+        match item_type.to_lowercase().as_str() {
+            "book" => {
+                let book = Book::terminal_interface_new();
+                self.add_item(Item::Book(book));
+            }
+            "audiobook" => {
+                let audiobook = AudioBook::terminal_interface_new();
+                self.add_item(Item::AudioBook(audiobook));
+            }
+            "statue" => {
+                let statue = Statue::terminal_interface_new();
+                self.add_item(Item::Statue(statue));
+            }
+            "painting" => {
+                let painting = Painting::terminal_interface_new();
+                self.add_item(Item::Painting(painting));
+            }
+            _ => println!("Invalid item type."),
         }
     }
 }
 
 fn main() {
-    let mut livraria = Livraria::new();
+    let library = Library::new();
 
+    // let new_book = Book::terminal_interface_new();
+    // library.add_item(Item::Book(new_book));
+
+    // println!("Exiting the program. Goodbye!");
+    // std::process::exit(0);
+    // }
     loop {
-        println!(
-            "\n1. Adicionar livro\n2. Remover livro\n3. Requisitar livro\n4. Devolver livro\n5. Listar livros\n6. Sair"
-        );
+        print_menu();
 
-        let mut opcao = String::new();
-        io::stdin().read_line(&mut opcao).unwrap();
-        let opcao = opcao.trim();
+        let choice = prompt_input("Enter your choice: ");
 
-        match opcao {
-            "1" => {
-                let (isbn, titulo, autor, palavras_chave, quantidade) = ler_dados_livro();
-                let livro = Livro {
-                    media_geral: MediaGeral {
-                        titulo: titulo.clone(),
-                        autor: autor.clone(),
-                        localizacao: String::from("Livraria"),
-                    },
-                    media_textual_ou_auditiva: MediaTextualOuAuditiva {
-                        palavras_chave: palavras_chave.clone(),
-                    },
-                    media_emprestavel: MediaEmprestavel {
-                        exemplares_em_stock: quantidade,
-                        exemplares_emprestados: 0,
-                    },
-                    media_fisica: MediaFisica {
-                        dimensao: (0.0, 0.0, 0.0), // Não aplicável para livros
-                        peso: 0.0,                 // Não aplicável para livros
-                    },
-                    isbn: isbn.clone(),
-                };
-                livraria.adicionar_livro(livro);
-            }
-            "2" => {
-                let isbn = ler_input("ISBN do livro a remover: ");
-                if livraria.remover_livro(&isbn) {
-                    println!("Livro removido.");
-                } else {
-                    println!("Livro não encontrado.");
-                }
-            }
-            "3" => {
-                let isbn = ler_input("ISBN do livro a requisitar: ");
-                if livraria.requisitar_livro(&isbn) {
-                    println!("Livro requisitado.");
-                } else {
-                    println!("Livro indisponível.");
-                }
-            }
-            "4" => {
-                let isbn = ler_input("ISBN do livro a devolver: ");
-                if livraria.devolver_livro(&isbn) {
-                    println!("Livro devolvido.");
-                } else {
-                    println!("Livro não estava emprestado.");
-                }
-            }
-            "5" => {
-                livraria.listar_livros();
-            }
-            "6" => {
-                println!("Saindo...");
+        match choice.as_str() {
+            // Book operations
+            "1" => add_book_menu(&mut library),
+            "2" => remove_book_menu(&mut library),
+            "3" => borrow_book_menu(&mut library),
+            "4" => return_book_menu(&mut library),
+
+            // AudioBook operations
+            "5" => add_audiobook_menu(&mut library),
+            "6" => remove_audiobook_menu(&mut library),
+            "7" => borrow_audiobook_menu(&mut library),
+            "8" => return_audiobook_menu(&mut library),
+
+            // Statue operations
+            "9" => add_statue_menu(&mut library),
+            "10" => remove_statue_menu(&mut library),
+
+            // Painting operations
+            "11" => add_painting_menu(&mut library),
+            "12" => remove_painting_menu(&mut library),
+
+            // Listing operations
+            "13" => library.list_books(),
+            "14" => library.list_audiobooks(),
+            "15" => library.list_statues(),
+            "16" => library.list_paintings(),
+            "17" => library.list_all_items(),
+
+            // Exit
+            "0" => {
+                println!("Exiting Library Management System...");
                 break;
             }
-            _ => println!("Opção inválida."),
+            _ => println!("Invalid option. Please try again."),
         }
+
+        println!("\nPress Enter to continue...");
+        io::stdin().read_line(&mut String::new()).unwrap();
     }
 }
 
-fn ler_dados_livro() -> (String, String, String, Vec<String>, u32) {
-    let isbn = ler_input("ISBN: ");
-    let titulo = ler_input("Título: ");
-    let autor = ler_input("Autor: ");
-    let palavras = ler_input("Palavras-chave (separadas por vírgula): ");
-    let palavras_chave = palavras.split(',').map(|s| s.trim().to_string()).collect();
-    let quantidade: u32 = ler_input("Quantidade em estoque: ").parse().unwrap_or(1);
-
-    (isbn, titulo, autor, palavras_chave, quantidade)
-}
-
-fn ler_input(prompt: &str) -> String {
-    println!("{}", prompt);
-    let mut entrada = String::new();
-    io::stdin().read_line(&mut entrada).unwrap();
-    entrada.trim().to_string()
+fn print_menu() {
+    clear_screen();
+    println!("╔════════════════════════════════════════╗");
+    println!("║       LIBRARY MANAGEMENT SYSTEM        ║");
+    println!("╠════════════════════════════════════════╣");
+    println!("║ ITEM MANAGEMENT:                       ║");
+    println!("║  1. Add a Item                         ║");
+    println!("║  2. Remove a Item                      ║");
+    println!("║  2. Find a Item (keyword)              ║");
+    println!("║  3. Borrow a Item                      ║");
+    println!("║  4. Return a Item                      ║");
+    println!("║                                        ║");
+    println!("║ AUDIOBOOK MANAGEMENT:                  ║");
+    println!("║  5. Add an audiobook                   ║");
+    println!("║  6. Remove an audiobook                ║");
+    println!("║  7. Borrow an audiobook                ║");
+    println!("║  8. Return an audiobook                ║");
+    println!("║                                        ║");
+    println!("║ STATUE MANAGEMENT:                     ║");
+    println!("║  9. Add a statue                       ║");
+    println!("║ 10. Remove a statue                    ║");
+    println!("║                                        ║");
+    println!("║ PAINTING MANAGEMENT:                   ║");
+    println!("║ 11. Add a painting                     ║");
+    println!("║ 12. Remove a painting                  ║");
+    println!("║                                        ║");
+    println!("║ LISTING OPTIONS:                       ║");
+    println!("║ 13. List all books                     ║");
+    println!("║ 14. List all audiobooks                ║");
+    println!("║ 15. List all statues                   ║");
+    println!("║ 16. List all paintings                 ║");
+    println!("║ 17. List all items                     ║");
+    println!("║                                        ║");
+    println!("║  0. Exit                               ║");
+    println!("╚════════════════════════════════════════╝");
 }
