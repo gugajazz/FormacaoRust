@@ -349,7 +349,7 @@ impl Library {
         }
     }
 
-    fn add_item(mut self, item: Item) {
+    fn add_item(&mut self, item: Item) {
         match item {
             Item::Book(ref book) => {
                 self.inverted_index.add_item(&item);
@@ -380,23 +380,34 @@ impl Library {
         }
     }
 
-    fn add_item_terminal_interface(mut self) {
+    fn add_item_terminal_interface(&mut self) {
         println!("=== Add New Item ===");
-        let item_type = prompt_input("Enter item type (book/audiobook/statue/painting): ");
-        match item_type.to_lowercase().as_str() {
-            "book" => {
+        println!("╔════════════════════════════════════════╗");
+        println!("║              ADD NEW ITEM              ║");
+        println!("╠════════════════════════════════════════╣");
+        println!("║                                        ║");
+        println!("║ ITEM MANAGEMENT:                       ║");
+        println!("║  1. Add a Book                         ║");
+        println!("║  2. Add a AudioBook                    ║");
+        println!("║  3. Add a Statue                       ║");
+        println!("║  4. Add a Painting                     ║");
+        println!("║                                        ║");
+        println!("╚════════════════════════════════════════╝");
+        let item_type: u16 = prompt_numeric("Option: ");
+        match item_type {
+            1 => {
                 let book = Book::terminal_interface_new();
                 self.add_item(Item::Book(book));
             }
-            "audiobook" => {
+            2 => {
                 let audiobook = AudioBook::terminal_interface_new();
                 self.add_item(Item::AudioBook(audiobook));
             }
-            "statue" => {
+            3 => {
                 let statue = Statue::terminal_interface_new();
                 self.add_item(Item::Statue(statue));
             }
-            "painting" => {
+            4 => {
                 let painting = Painting::terminal_interface_new();
                 self.add_item(Item::Painting(painting));
             }
@@ -406,7 +417,7 @@ impl Library {
 }
 
 fn main() {
-    let library = Library::new();
+    let mut library = Library::new();
 
     // let new_book = Book::terminal_interface_new();
     // library.add_item(Item::Book(new_book));
@@ -415,37 +426,105 @@ fn main() {
     // std::process::exit(0);
     // }
     loop {
-        print_menu();
-
+        print_main_menu();
         let choice = prompt_input("Enter your choice: ");
 
         match choice.as_str() {
             // Book operations
-            "1" => add_book_menu(&mut library),
-            "2" => remove_book_menu(&mut library),
-            "3" => borrow_book_menu(&mut library),
-            "4" => return_book_menu(&mut library),
+            "1" => library.add_item_terminal_interface(),
 
-            // AudioBook operations
-            "5" => add_audiobook_menu(&mut library),
-            "6" => remove_audiobook_menu(&mut library),
-            "7" => borrow_audiobook_menu(&mut library),
-            "8" => return_audiobook_menu(&mut library),
+            "2" => {
+                let uuid = prompt_input("Enter the UUID of the item to remove: ");
+                library.remove_item(&uuid);
+            }
 
-            // Statue operations
-            "9" => add_statue_menu(&mut library),
-            "10" => remove_statue_menu(&mut library),
-
-            // Painting operations
-            "11" => add_painting_menu(&mut library),
-            "12" => remove_painting_menu(&mut library),
-
-            // Listing operations
-            "13" => library.list_books(),
-            "14" => library.list_audiobooks(),
-            "15" => library.list_statues(),
-            "16" => library.list_paintings(),
-            "17" => library.list_all_items(),
+            "3" => {
+                let keyword = prompt_input("Enter a keyword to search: ");
+                let results = library.inverted_index.search(&keyword);
+                if results.is_empty() {
+                    println!("No items found with the keyword '{}'.", keyword);
+                } else {
+                    println!("Items found with the keyword '{}':", keyword);
+                    for uuid in results {
+                        if let Some(item) = library.items.get(uuid) {
+                            println!("{:#?}", item);
+                        }
+                    }
+                }
+            }
+            "4" => {
+                let uuid = prompt_input("Enter the UUID of the item to find: ");
+                if let Ok(uuid) = Uuid::parse_str(&uuid) {
+                    library.items.get(&uuid);
+                } else {
+                    println!("Invalid UUID format.");
+                }
+            }
+            "5" => {
+                // print all items
+                println!("All items in the library:");
+                for (uuid, item) in &library.items {
+                    println!("UUID: {}, Item: {:#?}", uuid, item);
+                }
+            }
+            "6" => {
+                // borrow item
+                let uuid = prompt_input("Enter the UUID of the item to borrow: ");
+                if let Ok(uuid) = Uuid::parse_str(&uuid) {
+                    if let Some(item) = library.items.get_mut(&uuid) {
+                        match item {
+                            Item::Book(book) => {
+                                if book.borrowable_media.borrow(None) {
+                                    println!("Borrowed Book: {:#?}", book);
+                                } else {
+                                    println!("No copies available for borrowing.");
+                                }
+                            }
+                            Item::AudioBook(audiobook) => {
+                                if audiobook.borrowable_media.borrow(None) {
+                                    println!("Borrowed Audiobook: {:#?}", audiobook);
+                                } else {
+                                    println!("No copies available for borrowing.");
+                                }
+                            }
+                            _ => println!("Item is not borrowable."),
+                        }
+                    } else {
+                        println!("Item with UUID {} not found.", uuid);
+                    }
+                } else {
+                    println!("Invalid UUID format.");
+                }
+            }
+            "7" => {
+                // return item
+                let uuid = prompt_input("Enter the UUID of the item to return: ");
+                if let Ok(uuid) = Uuid::parse_str(&uuid) {
+                    if let Some(item) = library.items.get_mut(&uuid) {
+                        match item {
+                            Item::Book(book) => {
+                                if book.borrowable_media.return_item(None) {
+                                    println!("Returned Book: {:#?}", book);
+                                } else {
+                                    println!("No copies borrowed.");
+                                }
+                            }
+                            Item::AudioBook(audiobook) => {
+                                if audiobook.borrowable_media.return_item(None) {
+                                    println!("Returned Audiobook: {:#?}", audiobook);
+                                } else {
+                                    println!("No copies borrowed.");
+                                }
+                            }
+                            _ => println!("Item is not borrowable."),
+                        }
+                    } else {
+                        println!("Item with UUID {} not found.", uuid);
+                    }
+                } else {
+                    println!("Invalid UUID format.");
+                }
+            }
 
             // Exit
             "0" => {
@@ -460,39 +539,36 @@ fn main() {
     }
 }
 
-fn print_menu() {
-    clear_screen();
+fn print_main_menu() {
+    // clear_screen();
     println!("╔════════════════════════════════════════╗");
-    println!("║       LIBRARY MANAGEMENT SYSTEM        ║");
+    println!("║  MAIN MENU LIBRARY MANAGEMENT SYSTEM   ║");
     println!("╠════════════════════════════════════════╣");
+    println!("║                                        ║");
     println!("║ ITEM MANAGEMENT:                       ║");
     println!("║  1. Add a Item                         ║");
     println!("║  2. Remove a Item                      ║");
-    println!("║  2. Find a Item (keyword)              ║");
-    println!("║  3. Borrow a Item                      ║");
-    println!("║  4. Return a Item                      ║");
+    println!("║  3. Find a Item (keyword)              ║");
+    println!("║  4. Find a Item (UUID)                 ║");
+    println!("║  5. Print all items                    ║");
+    println!("║  6. Borrow Item                        ║");
+    println!("║  7. Return Item                        ║");
     println!("║                                        ║");
-    println!("║ AUDIOBOOK MANAGEMENT:                  ║");
-    println!("║  5. Add an audiobook                   ║");
-    println!("║  6. Remove an audiobook                ║");
-    println!("║  7. Borrow an audiobook                ║");
-    println!("║  8. Return an audiobook                ║");
-    println!("║                                        ║");
-    println!("║ STATUE MANAGEMENT:                     ║");
-    println!("║  9. Add a statue                       ║");
-    println!("║ 10. Remove a statue                    ║");
-    println!("║                                        ║");
-    println!("║ PAINTING MANAGEMENT:                   ║");
-    println!("║ 11. Add a painting                     ║");
-    println!("║ 12. Remove a painting                  ║");
-    println!("║                                        ║");
-    println!("║ LISTING OPTIONS:                       ║");
-    println!("║ 13. List all books                     ║");
-    println!("║ 14. List all audiobooks                ║");
-    println!("║ 15. List all statues                   ║");
-    println!("║ 16. List all paintings                 ║");
-    println!("║ 17. List all items                     ║");
-    println!("║                                        ║");
-    println!("║  0. Exit                               ║");
     println!("╚════════════════════════════════════════╝");
+}
+
+fn _clear_screen() {
+    // On Windows
+    if cfg!(windows) {
+        let _ = std::process::Command::new("cmd")
+            .args(&["/c", "cls"])
+            .status();
+    }
+    // On Unix-like systems
+    else {
+        let _ = std::process::Command::new("clear").status();
+    }
+
+    // Fallback clear method
+    println!("\x1B[2J\x1B[1;1H");
 }
