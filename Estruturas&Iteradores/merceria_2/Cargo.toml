@@ -1,6 +1,9 @@
 [package]
 name = "merceria_2"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+ordered-float = "5.0.0"

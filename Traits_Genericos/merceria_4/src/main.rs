@@ -236,8 +236,13 @@ impl<T: Item> Row<T> {
         }
     }
 
-    pub fn add_rack(&mut self, rack_id: u32, max_capacity: u32) {
+    pub fn add_rack(&mut self, rack_id: u32, max_capacity: u32) -> Result<(), String> {
+        // Check if the row has space for a new rack
+        if self.racks.len() as u32 >= self.max_capacity {
+            return Err("Row is full".to_string());
+        }
         self.racks.insert(rack_id, Rack::new(max_capacity));
+        Ok(())
     }
 }
 
@@ -254,8 +259,13 @@ impl<T: Item> Rack<T> {
         }
     }
 
-    pub fn add_zone(&mut self, zone_id: u32) {
+    pub fn add_zone(&mut self, zone_id: u32) -> Result<(), String> {
+        // Check if the rack has space for a new zone
+        if self.zones.len() as u32 >= self.max_capacity {
+            return Err("Rack is full".to_string());
+        }
         self.zones.insert(zone_id, Zone { item: None });
+        Ok(())
     }
 }
 
@@ -307,8 +317,100 @@ mod tests {
     use ordered_float::OrderedFloat;
 
     #[test]
+    fn test_max_capacity() {
+        let mut shop = GroceryShop::<ExpirableItem>::new();
+        shop.initialize();
+
+        // try to add more zones than the max capacity
+        let row = 0;
+        let rack = 0;
+        let zone = 0;
+        let location = Location {
+            row_id: row,
+            rack_id: rack,
+            zone_id: zone,
+        };
+
+        // This should work because the rack is not full
+        let item = ExpirableItem {
+            name: "Milk".to_string(),
+            quantity: 5,
+            uuid: Uuid::new_v4(),
+            price: OrderedFloat(2.5),
+            expiration_date: chrono::Utc::now(),
+        };
+        if let Ok(_) = shop.add_item(item.clone(), &location) {
+            println!("Item added successfully");
+        } else {
+            println!("Failed to add item");
+            assert!(false);
+        }
+
+        // This should work because the rack is not full
+        let item2 = ExpirableItem {
+            name: "Bread".to_string(),
+            quantity: 5,
+            uuid: Uuid::new_v4(),
+            price: OrderedFloat(1.5),
+            expiration_date: chrono::Utc::now(),
+        };
+        let location2 = Location {
+            row_id: row,
+            rack_id: rack,
+            zone_id: zone + 1,
+        };
+        if let Ok(_) = shop.add_item(item2.clone(), &location2) {
+            println!("Item added successfully");
+        } else {
+            println!("Failed to add item");
+            assert!(false);
+        }
+
+        // This should fail because the rack is full
+        let item3 = ExpirableItem {
+            name: "Eggs".to_string(),
+            quantity: 5,
+            uuid: Uuid::new_v4(),
+            price: OrderedFloat(3.0),
+            expiration_date: chrono::Utc::now(),
+        };
+        let location3 = Location {
+            row_id: row,
+            rack_id: rack,
+            zone_id: zone + 2,
+        };
+        if let Err(err) = shop.add_item(item3.clone(), &location3) {
+            println!("Failed to add item: {}", err);
+            assert!(true);
+        } else {
+            println!("Item added successfully");
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_get_items_that_dont_exist() {
+        let mut shop = GroceryShop::<ExpirableItem>::new();
+        shop.initialize();
+
+        let location = Location {
+            row_id: 1,
+            rack_id: 1,
+            zone_id: 3,
+        };
+
+        if let Some(item) = shop.get_item(&location) {
+            println!("Item found: {:#?}", item);
+            assert!(false);
+        } else {
+            println!("Item not found");
+            assert!(true);
+        }
+    }
+
+    #[test]
     fn test_add_items() {
-        let mut shop = GroceryShop::new();
+        let mut shop = GroceryShop::<ExpirableItem>::new();
         shop.initialize();
 
         let item = ExpirableItem {
@@ -341,7 +443,7 @@ mod tests {
 
     #[test]
     fn test_remove_items() {
-        let mut shop = GroceryShop::new();
+        let mut shop = GroceryShop::<ExpirableItem>::new();
         shop.initialize();
 
         let item = ExpirableItem {
@@ -373,7 +475,7 @@ mod tests {
 
     #[test]
     fn test_move_items() {
-        let mut shop = GroceryShop::new();
+        let mut shop = GroceryShop::<ExpirableItem>::new();
         shop.initialize();
 
         let item = ExpirableItem {
@@ -416,7 +518,7 @@ mod tests {
     fn test_edit_items() {
         // Change price
         // Change name
-        let mut shop = GroceryShop::new();
+        let mut shop = GroceryShop::<ExpirableItem>::new();
         shop.initialize();
         let mut item = ExpirableItem {
             name: "Milk".to_string(),
@@ -451,7 +553,7 @@ mod tests {
     #[test]
     fn test_decrease_stock_items() {
         // Decrease stock
-        let mut shop = GroceryShop::new();
+        let mut shop = GroceryShop::<ExpirableItem>::new();
         shop.initialize();
         let mut item = ExpirableItem {
             name: "Milk".to_string(),
@@ -484,7 +586,7 @@ mod tests {
     #[test]
     fn test_increase_stock_items() {
         // Increase stock
-        let mut shop = GroceryShop::new();
+        let mut shop = GroceryShop::<ExpirableItem>::new();
         shop.initialize();
         let mut item = ExpirableItem {
             name: "Milk".to_string(),
@@ -516,7 +618,7 @@ mod tests {
 
     #[test]
     fn test_get_items_by_name() {
-        let mut shop = GroceryShop::new();
+        let mut shop = GroceryShop::<ExpirableItem>::new();
         shop.initialize();
 
         let item1 = ExpirableItem {
