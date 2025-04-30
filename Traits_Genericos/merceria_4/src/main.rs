@@ -1,3 +1,29 @@
+/*
+Defina todas as estruturas necessárias para fazer track do inventário de uma mercearia, organizado por fileiras, prateleiras e zonas dentro de cada prateleira.
+
+Deve guardar informação relativa ao produto:
+    identificador
+    nome
+    data de validade
+    preço
+    quantidade
+
+Ter a capacidade de adicionar e remover produtos, movê-los de local dentro da mercearia, mudar o preço e o nome.
+Ter a capacidade de adicionar e remover quantidade de produtos (restock).
+
+Estruturas de dados e iteradores
+Augmente a Merceria para podermos encontrar eficientemente os produtos dentro de uma fileira, prateleira e zona.
+Devemos também ser capazes de encontrar eficientemente um produto e a sua posição.
+
+Nulls and errors
+Augmente a merceria desenvolvida com a utilização de Options e Results.
+
+Traits and Generics
+Incremente a merceria ao definir uma trait que defina os comportamentos necessários de um artigo.
+A nossa merceria deve ser capaz de ser utilizada para um tipo de item genérico.
+Devemos manter todas as capacidades anteriores.
+*/
+
 use ordered_float::OrderedFloat;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -12,11 +38,13 @@ pub struct Location {
 #[derive(Debug, Clone)]
 pub struct GroceryShop<T: Item> {
     pub rows: HashMap<u32, Row<T>>,
+    pub name_index: HashMap<String, Vec<Location>>,
 }
 impl<T: Item> GroceryShop<T> {
     pub fn new() -> Self {
         GroceryShop {
             rows: HashMap::new(),
+            name_index: HashMap::new(),
         }
     }
 
@@ -51,18 +79,26 @@ impl<T: Item> GroceryShop<T> {
     pub fn add_item(&mut self, item: T, location: &Location) -> Result<(), String> {
         // Add item to the specified location in the warehouse
         if let Some(zone) = self.get_zone_mut(location) {
-            zone.item = Some(item);
+            zone.item = Some(item.clone());
+            self.add_item_to_name_index(&item, location);
             Ok(())
         } else {
-            Err("Invalid location".to_string())
+            Err("Could not add item".to_string())
         }
     }
 
-    pub fn remove_item(&mut self, location: &Location) {
+    pub fn remove_item(&mut self, location: &Location) -> Result<(), String> {
         // Remove item from the specified location in the warehouse
 
         if let Some(zone) = self.get_zone_mut(location) {
-            zone.item = None;
+            // zone.item = None;
+            // Remove item from the name index
+            if let Some(item) = zone.item.take() {
+                self.remove_item_from_name_index(&item, location);
+            }
+            Ok(())
+        } else {
+            Err("Could not remove item".to_string())
         }
     }
 
@@ -103,7 +139,7 @@ impl<T: Item> GroceryShop<T> {
         None
     }
 
-    pub fn get_location_of_item(&self, item: &T) -> Option<Location> {
+    pub fn get_location_of_item_linear_time(&self, item: &T) -> Option<Location> {
         // Get location of the specified item in the warehouse
         for (row_id, row) in &self.rows {
             for (rack_id, rack) in &row.racks {
@@ -136,7 +172,10 @@ impl<T: Item> GroceryShop<T> {
             let item = self.get_item(&from_location).unwrap().clone();
 
             // Then remove it and add it to the new location
-            self.remove_item(&from_location);
+            if let Err(err) = self.remove_item(&from_location) {
+                println!("Failed to remove item from the original location: {}", err);
+                return Err("Failed to move item due to removal error".to_string());
+            }
             if let Ok(_) = self.add_item(item.clone(), &to_location) {
                 // Successfully moved the item
                 Ok(())
@@ -149,6 +188,37 @@ impl<T: Item> GroceryShop<T> {
         } else {
             println!("Item not found at the specified location");
             Err("Item not found at the specified location".to_string())
+        }
+    }
+
+    pub fn get_items_by_name(&self, name: &str) -> Vec<&T> {
+        // Get items by name from the name index
+        let mut items = Vec::new();
+        if let Some(locations) = self.name_index.get(name) {
+            for location in locations {
+                if let Some(item) = self.get_item(location) {
+                    items.push(item);
+                }
+            }
+        }
+        items
+    }
+
+    pub fn add_item_to_name_index(&mut self, item: &T, location: &Location) {
+        // Add item to the name index
+        let name = item.name().to_string();
+        let locations = self.name_index.entry(name).or_insert_with(Vec::new);
+        locations.push(location.clone());
+    }
+
+    pub fn remove_item_from_name_index(&mut self, item: &T, location: &Location) {
+        // Remove item from the name index
+        let name = item.name().to_string();
+        if let Some(locations) = self.name_index.get_mut(&name) {
+            locations.retain(|loc| loc != location);
+            if locations.is_empty() {
+                self.name_index.remove(&name);
+            }
         }
     }
 }
@@ -294,7 +364,10 @@ mod tests {
             println!("Failed to add item");
         }
 
-        shop.remove_item(&location);
+        if let Err(err) = shop.remove_item(&location) {
+            println!("Failed to remove item: {}", err);
+            assert!(false);
+        }
         assert_eq!(shop.get_item(&location), None);
     }
 
@@ -439,5 +512,53 @@ mod tests {
             println!("Failed to edit item");
         }
         assert_eq!(shop.get_item(&location), Some(&item));
+    }
+
+    #[test]
+    fn test_get_items_by_name() {
+        let mut shop = GroceryShop::new();
+        shop.initialize();
+
+        let item1 = ExpirableItem {
+            name: "Milk".to_string(),
+            quantity: 5,
+            uuid: Uuid::new_v4(),
+            price: OrderedFloat(2.5),
+            expiration_date: chrono::Utc::now(),
+        };
+        let item2 = ExpirableItem {
+            name: "Milk".to_string(),
+            quantity: 10,
+            uuid: Uuid::new_v4(),
+            price: OrderedFloat(3.0),
+            expiration_date: chrono::Utc::now(),
+        };
+
+        let location1 = Location {
+            row_id: 1,
+            rack_id: 0,
+            zone_id: 0,
+        };
+        let location2 = Location {
+            row_id: 1,
+            rack_id: 1,
+            zone_id: 0,
+        };
+
+        if let Ok(_) = shop.add_item(item1.clone(), &location1) {
+            println!("Item added successfully");
+        } else {
+            println!("Failed to add item");
+        }
+        if let Ok(_) = shop.add_item(item2.clone(), &location2) {
+            println!("Item added successfully");
+        } else {
+            println!("Failed to add item");
+        }
+
+        let items = shop.get_items_by_name("Milk");
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0], &item1);
+        assert_eq!(items[1], &item2);
     }
 }
