@@ -15,6 +15,8 @@ Estruturas de dados e iteradores
 Augmente a Merceria para podermos encontrar eficientemente os produtos dentro de uma fileira, prateleira e zona.
 Devemos também ser capazes de encontrar eficientemente um produto e a sua posição.
 
+Eu imagino que este exercicio não é suposto ter Option e Results, mas não consegui fazer algo com o qual estivesse satisfeito sem os utilizar,
+visto que rust depende tão fortemente destes conceitos.
 */
 
 use ordered_float::OrderedFloat;
