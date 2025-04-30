@@ -14,6 +14,7 @@ O software terá que ter a capacidade de saber quantos exemplares temos de cada 
 
 E também a capacidade de: adicionar livros, remover livros, requisitar livros e devolver livros.
 
+Usei um hashmap porque achei mais correto do que Vecs.
 */
 
 use std::collections::HashMap;

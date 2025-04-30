@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use uuid::Uuid;
 
-type BookId = usize; // Type alias for book ID
+// type BookId = usize; // Type alias for book ID
 
 // Helper functions for the terminal interface
 fn prompt_input(prompt: &str) -> String {
@@ -30,7 +30,7 @@ fn prompt_numeric<T: std::str::FromStr>(prompt: &str) -> T {
     }
 }
 
-fn prompt_yes_no(prompt: &str) -> bool {
+fn _prompt_yes_no(prompt: &str) -> bool {
     loop {
         print!("{}", prompt);
         io::stdout().flush().unwrap();
@@ -112,7 +112,7 @@ impl InvertedIndex {
 
 // Item enum to store all possible library items
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Item {
+pub enum Item {
     Book(Book),
     AudioBook(AudioBook),
     Statue(Statue),
@@ -207,7 +207,7 @@ impl BorrowableMedia {
 
 // Specific media types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Book {
+pub struct Book {
     general_media: GeneralMedia,
     textual_or_auditive_media: TextualOrAuditiveMedia,
     borrowable_media: BorrowableMedia,
@@ -243,7 +243,7 @@ impl Book {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct AudioBook {
+pub struct AudioBook {
     general_media: GeneralMedia,
     textual_or_auditive_media: TextualOrAuditiveMedia,
     borrowable_media: BorrowableMedia,
@@ -276,7 +276,7 @@ impl AudioBook {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Statue {
+pub struct Statue {
     general_media: GeneralMedia,
     physical_media: PhysicalMedia,
     material: String,
@@ -306,7 +306,7 @@ impl Statue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Painting {
+pub struct Painting {
     general_media: GeneralMedia,
     physical_media: PhysicalMedia,
     style: String,
